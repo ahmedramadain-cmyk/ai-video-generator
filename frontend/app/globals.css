@@ -1,0 +1,207 @@
+"use client";
+
+import { useEffect, useState } from 'react';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+type StyleOption = 'cinematic' | 'realistic' | 'anime' | 'commercial';
+
+type Job = {
+  job_id: string;
+  prompt: string;
+  style: string;
+  duration: number;
+  language: string;
+  status: string;
+  output_url?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export default function HomePage() {
+  const [prompt, setPrompt] = useState('فيديو قصير عن شاب يفتح متجر إلكتروني صغير ويحقق نجاحاً كبيراً');
+  const [style, setStyle] = useState<StyleOption>('cinematic');
+  const [duration, setDuration] = useState(15);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [jobs, setJobs] = useState<Job[]>([]);
+
+  const loadJobs = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/jobs`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setJobs(data.jobs || []);
+    } catch (error) {
+      console.error('Failed to load jobs', error);
+    }
+  };
+
+  useEffect(() => {
+    loadJobs();
+    const interval = setInterval(loadJobs, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const generateVideo = async () => {
+    if (!prompt.trim()) {
+      setMessage('يرجى كتابة فكرة الفيديو أولاً');
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const res = await fetch(`${API_URL}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, style, duration, language: 'ar' }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'حدث خطأ أثناء إنشاء المهمة');
+      }
+
+      setMessage(`تمت إضافة المهمة بنجاح: ${data.job_id}`);
+      await loadJobs();
+    } catch (error: any) {
+      setMessage(error.message || 'حدث خطأ غير متوقع');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const statusLabel: Record<string, string> = {
+    queued: 'في الانتظار',
+    processing: 'قيد التنفيذ',
+    completed: 'مكتمل',
+    failed: 'فشل',
+  };
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-white">
+      <div className="mx-auto max-w-7xl px-6 py-10">
+        <header className="mb-10 flex items-center justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">AI Studio</p>
+            <h1 className="mt-2 text-4xl font-bold">مولد الفيديو بالذكاء الاصطناعي</h1>
+          </div>
+          <div className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-200">
+            عربي • MVP
+          </div>
+        </header>
+
+        <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-cyan-950/30">
+            <label className="mb-2 block text-sm text-slate-300">فكرة الفيديو</label>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={7}
+              className="w-full rounded-2xl border border-slate-700 bg-slate-900 p-4 text-base text-white outline-none ring-0 placeholder:text-slate-500"
+              placeholder="اكتب فكرة الفيديو...
+مثال: متجر إلكتروني يفتح أبوابه في اليوم الأول من التشغيل..."
+            />
+
+            <div className="mt-6 grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">النمط</label>
+                <select
+                  value={style}
+                  onChange={(e) => setStyle(e.target.value as StyleOption)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-white"
+                >
+                  <option value="cinematic">سينمائي</option>
+                  <option value="realistic">واقعي</option>
+                  <option value="anime">أنيمي</option>
+                  <option value="commercial">إعلاني</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">المدة (ثانية)</label>
+                <input
+                  type="number"
+                  min={5}
+                  max={90}
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-white"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={generateVideo}
+              disabled={loading}
+              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-cyan-500 to-violet-600 px-6 py-4 font-bold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? 'جاري إنشاء الفيديو...' : 'إنشاء الفيديو'}
+            </button>
+
+            {message && <div className="mt-4 rounded-xl bg-slate-900 px-4 py-3 text-sm text-cyan-200">{message}</div>}
+          </div>
+
+          <aside className="rounded-3xl border border-white/10 bg-gradient-to-br from-violet-900/40 to-slate-900 p-6">
+            <h2 className="text-xl font-bold">إحصائيات سريعة</h2>
+            <div className="mt-6 space-y-4">
+              <div className="rounded-2xl bg-slate-900/70 p-4">
+                <p className="text-sm text-slate-400">عدد المهام</p>
+                <p className="mt-2 text-3xl font-bold">{jobs.length}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-900/70 p-4">
+                <p className="text-sm text-slate-400">أحدث الحالة</p>
+                <p className="mt-2 text-lg">{jobs[0] ? statusLabel[jobs[0].status] || jobs[0].status : 'لا توجد مهام'}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-900/70 p-4">
+                <p className="text-sm text-slate-400">اللغة</p>
+                <p className="mt-2 text-lg">العربية</p>
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-2xl font-bold">المشاريع</h2>
+            <button onClick={loadJobs} className="rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-200">
+              تحديث
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {jobs.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-slate-400">
+                لا توجد مشاريع حتى الآن.
+              </div>
+            ) : (
+              jobs.map((job) => (
+                <div key={job.job_id} className="rounded-2xl border border-slate-700 bg-slate-900/80 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-lg font-semibold">{job.prompt.slice(0, 90)}</p>
+                      <p className="mt-1 text-sm text-slate-400">{job.style} • {job.duration} ثانية</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs text-cyan-300">
+                        {statusLabel[job.status] || job.status}
+                      </span>
+                      {job.output_url && (
+                        <a href={`http://localhost:8000/${job.output_url.replace('/tmp/', '')}`} target="_blank" className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
+                          معاينة
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
